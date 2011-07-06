@@ -5,16 +5,17 @@
 # the Free Software Foundation; either version 3 of the License, or
 # (at your option) any later version.
 #
-# Written (W) 2010 Vipin T Sreedharan
-# Copyright (C) 2010 Friedrich Miescher Laboratory of the Max Planck Society
+# Written (W) 2009-2011 Vipin T Sreedharan, Friedrich Miescher Laboratory
+# Copyright (C) 2009-2011 Max Planck Society
 #
-# Description : Convert a GTF format file to GFF3 format
+# Description : Convert data in Gene Transfer Format (GTF) to Generic Feature Format Version 3 (GFF3) file.
 
 import re, sys
 from operator import itemgetter
+from optparse import OptionParser
 
 def addCDSphase(strand, cds):
-    """Add CDS phase to the CDS exons"""
+    """Calculate CDS phase and add to the CDS exons"""
     
     cds_region, cds_flag = [], 0 
     if strand == '+':
@@ -58,7 +59,7 @@ def addCDSphase(strand, cds):
     return cds_region
 
 def buildUTR(cc, ec, strand):
-    """Build UTR regions from CDS and exon coordiantes"""
+    """Build UTR regions from a given set of CDS and exon coordiantes of a Gene"""
     
     utr5, utr3 = [], []
     if strand == '+':
@@ -97,9 +98,10 @@ def buildUTR(cc, ec, strand):
                 utr3.append(ex)
     return utr5, utr3
 
-def GFFWriter(gtf_file_content):
+def GFFWriter(gff_fh, gtf_file_content):
     """Write into GFF3 format"""
 
+    gff_fh.write('##gff-version 3\n')
     for contig, contig_info in sorted(gtf_file_content.items()): # first level, chromosome
         for feature, details in contig_info.items(): # second level, gene
             source, gene_start, gene_stop, transcript_details, orient, gname = dict(), [], [], dict(), None, None
@@ -132,7 +134,6 @@ def GFFWriter(gtf_file_content):
                     if tinfo['exon']:
                         utr5, utr3 = buildUTR(tinfo['CDS'], tinfo['exon'], orient) # getting UTR info from CDS and exon.
                         transcript_details[ftid] = dict(info = tinfo['info'], exon = tinfo['exon'], utr5 = utr5, utr3 = utr3, cds = tinfo['CDS'], tpe = 'mRNA')
-            
             if gene_start and gene_stop:# displying Gene, transcript and subfeatures
                 gene_start.sort()
                 gene_stop.sort()
@@ -141,40 +142,102 @@ def GFFWriter(gtf_file_content):
                     for src in source:break
                 else:
                     for src, freq in sorted(d.items(), key=itemgetter(1), reverse=True):break
-                print contig + '\t' + src + '\tgene\t' + str(gene_start[0]) + '\t' + str(gene_stop[0]) + '\t.\t' + orient + '\t.\tID=' + feature + ';Name=' + gname
+                pline = [str(contig),
+                        src,
+                        'gene',
+                        str(gene_start[0]),
+                        str(gene_stop[0]),
+                        '.',
+                        orient,
+                        '.',
+                        'ID=' + feature + ';Name=' + gname]
+                gff_fh.write('\t'.join(pline) + '\n')
                 for dtid, dinfo in transcript_details.items():
                     if dinfo['info'][4]:
-                        print contig + '\t' + dinfo['info'][0] + '\t' + dinfo['tpe'] + '\t' + str(dinfo['exon'][0][0]) + '\t' + str(dinfo['exon'][-1][1]) + '\t' + dinfo['info'][2] + '\t' + orient + '\t.\tID=' + dtid + ';Parent=' + feature + ';Name=' + dinfo['info'][4]
+                        pline = [str(contig),
+                                dinfo['info'][0],
+                                dinfo['tpe'],
+                                str(dinfo['exon'][0][0]),
+                                str(dinfo['exon'][-1][1]),
+                                dinfo['info'][2],
+                                orient,
+                                '.',
+                                'ID=' + dtid + ';Parent=' + feature + ';Name=' + dinfo['info'][4]]
+                        gff_fh.write('\t'.join(pline) + '\n')
                     else:
-                        print contig + '\t' + dinfo['info'][0] + '\t' + dinfo['tpe'] + '\t' + str(dinfo['exon'][0][0]) + '\t' + str(dinfo['exon'][-1][1]) + '\t' + dinfo['info'][2] + '\t' + orient + '\t.\tID=' + dtid + ';Parent=' + feature
+                        pline = [str(contig),
+                                dinfo['info'][0],
+                                dinfo['tpe'],
+                                str(dinfo['exon'][0][0]),
+                                str(dinfo['exon'][-1][1]),
+                                dinfo['info'][2],
+                                orient,
+                                '.',
+                                'ID=' + dtid + ';Parent=' + feature]
+                        gff_fh.write('\t'.join(pline) + '\n')
                     if 'utr5' in dinfo:
-                        for ele in dinfo['utr5']:print contig + '\t' + dinfo['info'][0] + '\tfive_prime_UTR\t' + str(ele[0]) + '\t' + str(ele[1]) + '\t.\t' + orient + '\t.\tParent=' + dtid 
+                        for ele in dinfo['utr5']:
+                            pline = [str(contig),
+                                    dinfo['info'][0], 
+                                    'five_prime_UTR',
+                                    str(ele[0]), 
+                                    str(ele[1]),
+                                    '.',
+                                    orient,
+                                    '.',
+                                    'Parent=' + dtid]
+                            gff_fh.write('\t'.join(pline) + '\n')
                     if 'cds' in dinfo:
                         cds_w_phase = addCDSphase(orient, dinfo['cds'])
-                        for ele in cds_w_phase:print contig + '\t' + dinfo['info'][0] + '\tCDS\t' + str(ele[0]) + '\t' + str(ele[1]) + '\t.\t' + orient + '\t' + str(ele[-1]) +'\tParent=' + dtid
+                        for ele in cds_w_phase:
+                            pline = [str(contig),
+                                    dinfo['info'][0],
+                                    'CDS',
+                                    str(ele[0]),
+                                    str(ele[1]),
+                                    '.',
+                                    orient,
+                                    str(ele[-1]),
+                                    'Parent=' + dtid]
+                            gff_fh.write('\t'.join(pline) + '\n')
                     if 'utr3' in dinfo:
-                        for ele in dinfo['utr3']:print contig + '\t' + dinfo['info'][0] + '\tthree_prime_UTR\t' + str(ele[0]) + '\t' + str(ele[1]) + '\t.\t' + orient + '\t.\tParent=' + dtid
+                        for ele in dinfo['utr3']:
+                            pline = [str(contig),
+                                    dinfo['info'][0],
+                                    'three_prime_UTR',
+                                    str(ele[0]),
+                                    str(ele[1]),
+                                    '.',
+                                    orient,
+                                    '.',
+                                    'Parent=' + dtid]
+                            gff_fh.write('\t'.join(pline) + '\n')
                     if 'exon' in dinfo:
-                        for ele in dinfo['exon']:print contig + '\t' + dinfo['info'][0] + '\texon\t' + str(ele[0]) + '\t' + str(ele[1]) + '\t.\t' + orient + '\t.\tParent=' + dtid
-
+                        for ele in dinfo['exon']:
+                            pline = [str(contig),
+                                    dinfo['info'][0],
+                                    'exon',
+                                    str(ele[0]),
+                                    str(ele[1]),
+                                    '.',
+                                    orient,
+                                    '.',
+                                    'Parent=' + dtid]
+                            gff_fh.write('\t'.join(pline) + '\n')
 
 def get_GTF_info(gtf_file):
-    """Parse informations from GTF file"""
+    """Parse informations from GTF a file"""
 
-    gtf_content = dict()
-    gtf_fh = open(gtf_file, 'rU')
-    recall = None
-    for gtf_line in gtf_fh:
+    gtf_content, recall = dict(), None
+    for gtf_line in gtf_file:
         gtf_line = gtf_line.strip('\n\r').split('\t')
-        if re.match(r'#', gtf_line[0]):continue
-        if re.match(r'>', gtf_line[0]):continue
-        if len(gtf_line) == 1:continue
+        if re.match(r'#', gtf_line[0]) or re.match(r'>', gtf_line[0]) or len(gtf_line)==1:continue ## Commented, FASTA lines are not considering 
+        if '' in gtf_line:continue ## an empty line is not considering
         assert len(gtf_line) == 9, '\t'.join(gtf_line)
         if gtf_line[2] == 'start_codon':continue
 
-        attributes = gtf_line[-1].split(';')
-        gid, tid, pid, gname, tname, ex_cnt = None, None, None, None, None, None
-        for ele in attributes:
+        gid, tid, pid, gname, tname, ex_cnt, = None, None, None, None, None, None
+        for ele in gtf_line[-1].split(';'):
             if re.search(r'^\s?$', ele):continue
             if re.match(r'^\s', ele):ele = ele.lstrip()
             try:
@@ -191,42 +254,102 @@ def get_GTF_info(gtf_file):
 
         if tid == None:
             if gtf_line[2] == 'CDS':tid = recall # JGI Joint Genome Institute GTF files dont have transcript ID for CDS line
-        if tid == pid == None:continue # stop_codon icluded in CDS coordinates of JGI GTF files, moreover stop_codon lines dont have any transcript identifications.
+        if tid == pid == None:continue # stop_codon included in CDS coordinates of JGI GTF files, moreover stop_codon lines dont have any transcript identifications.
         if gid == tid:gid = 'Gene:' + str(gid);tid = 'Transcript:' + str(tid) # UCSC gene and transcript ID are similar, differentaiting with Gene: and Transcript: tag in the begning 
         
         if gtf_line[0] in gtf_content: # existing chromosome
             if gid in gtf_content[gtf_line[0]].keys(): # existing gene 
                 if tid in gtf_content[gtf_line[0]][gid].keys(): # existing transcript
-                    if gtf_line[2] == 'exon':gtf_content[gtf_line[0]][gid][tid]['exon'].append((int(gtf_line[3]), int(gtf_line[4])))
-                    elif gtf_line[2] == 'CDS':gtf_content[gtf_line[0]][gid][tid]['CDS'].append((int(gtf_line[3]), int(gtf_line[4])))
-                    elif gtf_line[2] == 'stop_codon':gtf_content[gtf_line[0]][gid][tid]['stop_codon'].append((int(gtf_line[3]), int(gtf_line[4])))
+                    if gtf_line[2] == 'exon':
+                        gtf_content[gtf_line[0]][gid][tid]['exon'].append((int(gtf_line[3]), int(gtf_line[4])))
+                    elif gtf_line[2] == 'CDS':
+                        gtf_content[gtf_line[0]][gid][tid]['CDS'].append((int(gtf_line[3]), int(gtf_line[4])))
+                    elif gtf_line[2] == 'stop_codon':
+                        gtf_content[gtf_line[0]][gid][tid]['stop_codon'].append((int(gtf_line[3]), int(gtf_line[4])))
                 else: # new transcript 
-                    if gtf_line[2] == 'exon':gtf_content[gtf_line[0]][gid][tid] = dict(exon = [(int(gtf_line[3]), int(gtf_line[4]))], CDS = [], stop_codon = [], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])
-                    elif gtf_line[2] == 'CDS':gtf_content[gtf_line[0]][gid][tid] = dict(exon = [], CDS = [(int(gtf_line[3]), int(gtf_line[4]))], stop_codon = [], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])
-                    elif gtf_line[2] == 'stop_codon':gtf_content[gtf_line[0]][gid][tid] = dict(exon = [], CDS = [], stop_codon = [(int(gtf_line[3]), int(gtf_line[4]))], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])
+                    if gtf_line[2] == 'exon':
+                        gtf_content[gtf_line[0]][gid][tid] = dict(exon = [(int(gtf_line[3]), 
+                                                            int(gtf_line[4]))], 
+                                                            CDS = [], 
+                                                            stop_codon = [], 
+                                                            info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])
+                    elif gtf_line[2] == 'CDS':
+                        gtf_content[gtf_line[0]][gid][tid] = dict(exon = [], 
+                                                            CDS = [(int(gtf_line[3]), 
+                                                            int(gtf_line[4]))], 
+                                                            stop_codon = [], 
+                                                            info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])
+                    elif gtf_line[2] == 'stop_codon':
+                        gtf_content[gtf_line[0]][gid][tid] = dict(exon = [], 
+                                                            CDS = [], 
+                                                            stop_codon = [(int(gtf_line[3]), 
+                                                            int(gtf_line[4]))], 
+                                                            info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])
             else: # new gene  
-                if gtf_line[2] == 'exon':gtf_content[gtf_line[0]][gid] = {tid : dict(exon = [(int(gtf_line[3]), int(gtf_line[4]))], CDS = [], stop_codon = [], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}
-                elif gtf_line[2] == 'CDS':gtf_content[gtf_line[0]][gid] = {tid : dict(exon = [], CDS = [(int(gtf_line[3]), int(gtf_line[4]))], stop_codon = [], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}
-                elif gtf_line[2] == 'stop_codon':gtf_content[gtf_line[0]][gid] = {tid : dict(exon = [], CDS = [], stop_codon = [(int(gtf_line[3]), int(gtf_line[4]))], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}
+                if gtf_line[2] == 'exon':
+                    gtf_content[gtf_line[0]][gid] = {tid : dict(exon = [(int(gtf_line[3]), 
+                                                    int(gtf_line[4]))], 
+                                                    CDS = [], 
+                                                    stop_codon = [], 
+                                                    info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}
+                elif gtf_line[2] == 'CDS':
+                    gtf_content[gtf_line[0]][gid] = {tid : dict(exon = [], 
+                                                    CDS = [(int(gtf_line[3]), 
+                                                    int(gtf_line[4]))], 
+                                                    stop_codon = [], 
+                                                    info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}
+                elif gtf_line[2] == 'stop_codon':
+                    gtf_content[gtf_line[0]][gid] = {tid : dict(exon = [], 
+                                                    CDS = [], 
+                                                    stop_codon = [(int(gtf_line[3]), 
+                                                    int(gtf_line[4]))], 
+                                                    info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}
         else: # new chromosome
-            if gtf_line[2] == 'exon':gtf_content[gtf_line[0]] = {gid : {tid : dict(exon = [(int(gtf_line[3]), int(gtf_line[4]))], CDS = [], stop_codon = [], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}}
-            elif gtf_line[2] == 'CDS':gtf_content[gtf_line[0]] = {gid : {tid : dict(exon = [], CDS = [(int(gtf_line[3]), int(gtf_line[4]))], stop_codon = [], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}}
-            elif gtf_line[2] == 'stop_codon':gtf_content[gtf_line[0]] = {gid : {tid : dict(exon = [], CDS = [], stop_codon = [(int(gtf_line[3]), int(gtf_line[4]))], info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}}
+            if gtf_line[2] == 'exon':
+                gtf_content[gtf_line[0]] = {gid : {tid : dict(exon = [(int(gtf_line[3]), 
+                                            int(gtf_line[4]))], 
+                                            CDS = [], 
+                                            stop_codon = [], 
+                                            info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}}
+            elif gtf_line[2] == 'CDS':
+                gtf_content[gtf_line[0]] = {gid : {tid : dict(exon = [], 
+                                            CDS = [(int(gtf_line[3]), 
+                                            int(gtf_line[4]))], 
+                                            stop_codon = [], 
+                                            info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}}
+            elif gtf_line[2] == 'stop_codon':
+                gtf_content[gtf_line[0]] = {gid : {tid : dict(exon = [], 
+                                            CDS = [], 
+                                            stop_codon = [(int(gtf_line[3]), 
+                                            int(gtf_line[4]))], 
+                                            info = [gtf_line[1], gtf_line[6], gtf_line[5], gname, tname])}}
         recall = tid
-
-    gtf_fh.close()
     return gtf_content
+
+def stop_err(fmsg):
+
+    sys.stderr.write('%s\n' % fmsg)
+    sys.exit(-1)
 
 def __main__():
 
-    try:
-        gtf_file = sys.argv[1]
-    except:
-        sys.stderr.write('\nGTF format file fail to open, Cannot continue...\n\tUSAGE: gtf_to_gff3_converter.py <file in gtf> > <file in GFF3>\n\n')
-        sys.exit(-1)
+    cmd_arg = OptionParser()
+    cmd_arg.add_option('', '-q', dest='query_file', help='Query file in Gene transfer format (GTF)')
+    cmd_arg.add_option('', '-o', dest='result_file', help='Output file name with GFF3 extension')
+    options, args = cmd_arg.parse_args()
+    if len(sys.argv) < 2:cmd_arg.print_help();sys.exit(-1)
     
-    gtf_file_content = get_GTF_info(gtf_file)
-    print '##gff-version 3'
-    GFFWriter(gtf_file_content)
+    try:
+        gtf_fh = open(options.query_file, 'rU') 
+    except Exception, erm:
+        stop_err('Error reading query file ' + str(erm))
+    try:
+        gff_fh = open(options.result_file, 'w')
+    except Exception, erm:
+        stop_err('Error writing result file ' + str(erm))
+    gtf_file_content = get_GTF_info(gtf_fh)
+    gtf_fh.close()
+    GFFWriter(gff_fh, gtf_file_content)
+    gff_fh.close()
 
 if __name__ == "__main__": __main__()

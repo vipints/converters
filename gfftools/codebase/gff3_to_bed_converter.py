@@ -37,7 +37,20 @@ def WriteBED(tinfo, einfo, bed_fh):
                         rstart = int(ex_ele[1])
                     else:
                         exon_cod += str(int(ex_ele[1])-rstart) + ','
-                if exon_len: bed_fh.write(contig_id + '\t' + tloc[0] + '\t' + tloc[1] + '\t' + tid + '\t' + tloc[2] + '\t' + tloc[-1] + '\t' + tloc[0] + '\t' + tloc[1] + '\t0\t' + str(exon_cnt) + '\t' + exon_len + '\t' + exon_cod + '\n')
+                if exon_len:
+                    pline = [str(contig_id),
+                            tloc[0],
+                            tloc[1],
+                            tid,
+                            tloc[2],
+                            tloc[-1],
+                            tloc[0],
+                            tloc[1],
+                            '0',
+                            str(exon_cnt),
+                            exon_len,
+                            exon_cod]
+                    bed_fh.write('\t'.join(pline) + '\n')
     bed_fh.close()
 
 def ParseAnno(gff_fh):
@@ -48,7 +61,6 @@ def ParseAnno(gff_fh):
 
     for gff_line in gff_fh:
         gff_line = gff_line.strip('\n\r').split('\t')
-        if not gff_line:continue 
         if re.match(r'#', gff_line[0]) or re.match(r'>', gff_line[0]) or len(gff_line) == 1:continue ## not considering commented and FASTA  lines from GFF
         if '' in gff_line:continue ## empty fields in any line ? 
         assert len(gff_line) == 9, '\t'.join(gff_line) ## a valid GFF line contains only 9 tab-delimited fields
@@ -56,7 +68,9 @@ def ParseAnno(gff_fh):
         if gff_line[2] in features:
             tid = None
             for ele in gff_line[-1].split(';'):
-                if re.search(r'ID=', ele):tid = re.search(r'ID=(.+)', ele).group(1);break
+                if re.search(r'ID=', ele):
+                    tid = re.search(r'ID=(.+)', ele).group(1)
+                    break
             if gff_line[0] in tinfo:
                 tinfo[gff_line[0]][tid] = (gff_line[3], gff_line[4], gff_line[5], gff_line[6])
             else:
@@ -64,7 +78,9 @@ def ParseAnno(gff_fh):
         elif gff_line[2] == 'exon':
             pid = None
             for ele in gff_line[-1].split(';'):
-                if re.search(r'Parent=', ele):pid = re.search(r'Parent=(.+)', ele).group(1);break
+                if re.search(r'Parent=', ele):
+                    pid = re.search(r'Parent=(.+)', ele).group(1)
+                    break
             if pid in einfo:
                 einfo[pid].append((gff_line[0], int(gff_line[3]), int(gff_line[4])))
             else:
@@ -88,12 +104,10 @@ def __main__():
             stop_err('Error reading query file ' + str(erm))
         
         tinfo, einfo = ParseAnno(gff_fh) ## get transcript annotation from GFF3 file 
-
         try:
             bed_fh = open(options.result_file, 'w')
         except Exception, erm:
             stop_err('Error writing result file ' + str(erm))
-        
         WriteBED(tinfo, einfo, bed_fh) ## BED writter 
 
 if __name__ == "__main__": __main__() 

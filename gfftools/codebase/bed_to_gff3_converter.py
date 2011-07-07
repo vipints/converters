@@ -49,13 +49,40 @@ def __main__():
             exon_len = line[-2].split(',')
             if exon_len[-1] == '': exon_len.pop()
             if line[5] != '+' and line[5] != '-':line[5] = '.' # replace the unknown strand with '.' 
-            gff_fh.write(line[0] + '\tfml_bed2gff\tgene\t' + str(int(line[1]) + 1) + '\t' + line[2] + '\t' + line[4] + '\t' + line[5] + '\t.\t' + 'ID=Gene:' + line[3] + ';Name=Gene:' + line[3] +'\n')
-            gff_fh.write(line[0] + '\tfml_bed2gff\ttranscript\t' + str(int(line[1]) + 1) + '\t' + line[2] + '\t' + line[4] + '\t' + line[5] + '\t.\t' + 'ID=' + line[3] + ';Name=' + line[3] + ';Parent=Gene:' + line[3] + '\n')
+            pline = [str(line[0]),
+                    'fml_bed2gff',
+                    'gene',
+                    str(int(line[1]) + 1),
+                    line[2],
+                    line[4],
+                    line[5],
+                    '.'
+                    'ID=Gene:' + line[3] + ';Name=Gene:' + line[3]]
+            gff_fh.write('\t'.join(pline) + '\n')
+            pline = [str(line[0]),
+                    'fml_bed2gff',
+                    'transcript',
+                    str(int(line[1]) + 1),
+                    line[2],
+                    line[4],
+                    line[5],
+                    '.',
+                    'ID=' + line[3] + ';Name=' + line[3] + ';Parent=Gene:' + line[3]]
+            gff_fh.write('\t'.join(pline) + '\n')
             st = int(line[1])
             for ex_cnt in range(int(line[-3])):
                 start = st + int(rstart[ex_cnt]) + 1
                 stop = start + int(exon_len[ex_cnt]) - 1
-                gff_fh.write(line[0] + '\tfml_bed2gff\texon\t' + str(start) + '\t' + str(stop) + '\t' + line[4] + '\t' + line[5] + '\t.\t' + 'Parent=' + line[3] + '\n')
+                pline = [str(line[0]),
+                        'fml_bed2gff',
+                        'exon',
+                        str(start),
+                        str(stop),
+                        line[4],
+                        line[5],
+                        '.',
+                        'Parent=' + line[3]]
+                gff_fh.write('\t'.join(pline) + '\n')
         bed_fh.close()
         gff_fh.close()
 

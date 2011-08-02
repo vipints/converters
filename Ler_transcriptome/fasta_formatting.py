@@ -22,7 +22,9 @@ def __main__():
             if nt == 'U':
                 rna_genome[i] = 'T'
             i += 1
-        gseq = SeqRecord(rna_genome, id=rec.id, description='A. thaliana_ribosomal_RNA')
+        rna_genome = 100*'N' + rna_genome + 100*'N' ## adding a non-nucleotide clips at both ends of the sequence.
+
+        gseq = SeqRecord(rna_genome, id=rec.id, description='A_thaliana_ribosomal_RNA')
         print gseq.format("fasta")
         #break
     fah.close()

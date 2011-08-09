@@ -2,7 +2,7 @@
 # DESC 
 
 import sys, re
-from BCBio import GFF
+from Core import GFF
     
 def WriteSortedGFF(fname, limit_parse, sorted_pos):
 
@@ -10,7 +10,7 @@ def WriteSortedGFF(fname, limit_parse, sorted_pos):
     for rec in GFF.parse(fgh, limit_info=limit_parse):
         for sort_pos in sorted_pos:
             for feature in rec.features:
-                if sort_pos == (feature.location.start, feature.location.end):
+                if sort_pos == (feature.location._start.position, feature.location._end.position):
                     orient = None
                     if feature.strand == 1:
                         orient = '+'
@@ -74,7 +74,7 @@ def WriteSortedGFF(fname, limit_parse, sorted_pos):
                                         'Parent=' + tlevel.qualifiers['Parent'][0]
                                         ]
                             print '\t'.join(xline)    
-                    break
+                    #break
             #break ## one sorted position 
     fgh.close()
 
@@ -83,24 +83,26 @@ def __main__():
     try:
         gff_file = sys.argv[1]
         chrid = sys.argv[2]
-        #source = sys.argv[3]
+        source = sys.argv[3]
     except:
         sys.stderr.write('Access denied for a GFF file !\n')
         sys.exit(-1)
     
+    #gff_source = ['rheMac2_ensGene', 'rheMac2_refGene', 'rheMac2_refSeqAnno', 'rheMac2_transMapAlnUcscGenes']
     limit_parse = dict(
                 gff_id = [chrid],
-                gff_source = ['rheMac2_ensGene', 'rheMac2_refGene', 'rheMac2_refSeqAnno', 'rheMac2_transMapAlnUcscGenes']
+                gff_source = [source]
                 )
-    chrpos = []
+
+    chrpos = dict()
     fh = open(gff_file)
     for rec in GFF.parse(fh, limit_info=limit_parse):
         for element in rec.features:
-            chrpos.append((element.location.start, element.location.end))
+            chrpos[(element.location._start.position, element.location._end.position)] = 1
     fh.close()
-    chrpos.sort()
 
-    WriteSortedGFF(gff_file, limit_parse, chrpos)
+    sorted_chrpos = [sort_pos for sort_pos in sorted(chrpos)]
 
+    WriteSortedGFF(gff_file, limit_parse, sorted_chrpos)
 
 if __name__=="__main__":__main__()

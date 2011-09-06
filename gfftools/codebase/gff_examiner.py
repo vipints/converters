@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+"""Program to find the relationship between features in GFF dataset.
+
+Usage: 
+*.py <GFF file>
+
+"""
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -7,8 +13,6 @@
 #
 # Written (W) 2009-2011 Vipin T Sreedharan, Friedrich Miescher Laboratory
 # Copyright (C) 2009-2011 Max Planck Society
-#
-# Description : Provide a mapping of parent to child relationships in a Generic Feature Format Version 3 file. 
 
 import re, sys 
 import collections
@@ -179,68 +183,30 @@ def parent_child_id_map(gff_handle):
         unique_ctypes = list(set(ctypes))
         unique_ctypes.sort()
         pc_final_map[ptype] = unique_ctypes
+      
+    # some cases the GFF file represents a single feature type 
+    if not pc_final_map:
+        for fid, stypes in parent_sts.items():
+            pc_final_map[stypes] = dict()
 
-    # Check for Parent Child relations
-    level1, level2, level3, sec_level_mis = {}, {}, {}, {}
-    for etype, fchild in pc_final_map.items():
-        level2_flag = 0
-        for kp, vp in pc_final_map.items():
-            if etype in vp:level2_flag = 1; level2[etype] = 1 # check for second level features
-        if level2_flag == 0: # first level features
-            level1[etype] =1 
-            for eachfch in fchild: # perform a check for all level1 objects values were defined as level2 keys.  
-                if not eachfch in pc_final_map.keys(): # figure out the missing level2 objects  
-                    if etype in sec_level_mis:
-                        sec_level_mis[etype].append(eachfch)
-                    else:
-                        sec_level_mis[etype]=[eachfch]
-        if level2_flag == 1:level3[str(fchild)] =1  # taking third level features 
-    # disply the result 
-    print
-    print 'Found following level features from the given GFF file'
-    print
-    if level1==level2==level3=={} and sec_level_mis == {}:
-        print 'FIRST level feature(s):'
-        source_type = dict()
-        gff_handle = open(gff_handle.name, 'rU')
-        for line in gff_handle:
-            line = line.strip('\n\r')
-            if line[0] == '#': continue
-            parts = line.split('\t')
-            if parts[-1] == '':parts.pop()
-            assert len(parts) == 9, line
-            source_type[(parts[1], parts[2])] = 1
-        gff_handle.close()
-        for ele in source_type:print '\t' + str(ele)
-        print
-    else:
-        print 'FIRST level feature(s):'
-        for ele in level1: print '\t' + str(ele)
+    # generate a report on feature id mapping in the file 
+    print '------------------------------------------------------'
+    print 'Parent feature type | Associated child feature type(s)'
+    print '------------------------------------------------------'
+    for key, value in pc_final_map.items():
+        print key[0], key[1]
+        for child_to in value:
+            print '\t\t|',child_to[0], child_to[1]
         print 
-        print 'SECOND level feature(s):'
-        for ele in level2: print '\t' + str(ele)
-        print 
-        print 'THIRD level feature(s):'
-        for ele in level3:print '\t' + str(ele[1:-1])
-        print
-        # wrong way mapped feature mapping description 
-        for wf, wfv in sec_level_mis.items():
-            if wf[1]=='gene':
-                print '**FYI**'
-                print 'GFF Parsing modules from publicly available packages like Bio-python, Bio-perl etc. are heavily dependent on feature identifier mapping.' 
-                print 'Here few features seems to be wrongly mapped to its child, which inturn cause problems while extracting the annotation based on feature identifier.'
-                print 
-                for ehv in wfv:
-                    if ehv[1]=='exon' or ehv[1]=='intron' or ehv[1]=='CDS' or ehv[1]=='three_prime_UTR' or ehv[1]=='five_prime_UTR':
-                        print 'Error in ID mapping: Level1 feature ' + str(wf) + ' maps to Level3 feature ' + str(ehv)
-                print 
+    print '------------------------------------------------------'
 
 if __name__=='__main__':
 
     try:
         gff_handle = open(sys.argv[1], 'rU')
     except:
-        sys.stderr.write("Access denied for a GFF file, Please check the query file\nUSAGE: gff_examiner.py <gff file>\n")
+        print "Incorrect arguments supplied"
+        print __doc__
         sys.exit(-1)
 
     parent_child_id_map(gff_handle)

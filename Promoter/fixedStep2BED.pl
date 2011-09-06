@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-#	Description: - read fixedStep and variableStep wiggle input data,
+#	Description: - read fixedStep or variableStep wiggle input data,
 #		output four column bedGraph format data
 #   Author: Vipin
 
@@ -8,6 +8,7 @@ use strict;
 
 my ($position, $chr, $step, $span) = (0, "", 1, 1);
 
+=head Make compactible with cmd
 my $usage = q(
 fixedStep2BED.pl  - Program to convert a valid fixedStep or variableStep wiggle input data to BED format.
 USAGE: fixedStep2BED.pl <fixedStep/variableStep Wiggle format> > <output file name>
@@ -22,6 +23,11 @@ if (scalar(@ARGV) != 1) {
 my $inFile = $ARGV[0];
 open WIG, "<$inFile" || die "Can't open the Wiggle file \n";
 while (my $dataValue = <WIG>)
+=cut
+
+#my $cnt = 1; 
+
+while (my $dataValue = <STDIN>)
 {
     chomp $dataValue;
     if ( $dataValue =~ m/^track /) {
@@ -33,7 +39,7 @@ while (my $dataValue = <WIG>)
         $chr = "";
         $step = 1;
         $span = 1;
-        my @a = split('\t', $dataValue);
+        my @a = split /\s/, $dataValue;
         for (my $i = 1; $i < scalar(@a); ++$i) {
             my ($ident, $value) = split('=',$a[$i]);
             if ($ident =~ m/chrom/) { $chr = $value; }
@@ -53,9 +59,9 @@ while (my $dataValue = <WIG>)
             $dataValue = $b[1];
         }
         my $loc_pos = $position+$span;
-        print "$chr\t$position\t$loc_pos\t$dataValue\n";
+        print "chr$chr\t$position\t$loc_pos\t$dataValue\t-\n";
         $position = $position + $step;
     }
 }
-close WIG;
+#close WIG;
 exit;

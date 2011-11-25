@@ -15,7 +15,10 @@ def __main__():
         sys.stderr.write('Access denied for a FASTQ format file !\n')
         sys.exit(-1)
     
-    ffh = open(fastqFile)
+    if fastqFile == '-':
+        ffh = sys.stdin
+    else:
+        ffh = open(fastqFile)
     read_cnt = 0 
     for rec in SeqIO.parse(ffh, 'fastq'):
         read_cnt += 1

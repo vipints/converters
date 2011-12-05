@@ -88,103 +88,153 @@ def readScaner(alignDB, cg_featdb, oth_featdb, ribo_featdb, te_featdb, psd_featd
     cnt_share, cnt_cg, cnt_te, cnt_ribo, cnt_pd, cnt_oth, cnt_int = 0, 0, 0, 0, 0, 0, 0
     shared_reads, inter_gene_reads, CG_reads = dict(), dict(), dict()
     #Oth_reads, Ribo_reads, TE_reads, Psd_reads = dict(), dict(), dict(), dict()
+    intplus, intmin, share_plus, share_min = 0, 0, 0, 0
+    cgplus, cgmin, othplus, othmin = 0, 0, 0, 0
+    teplus, temin, pdplus, pdmin, ribplus, ribmin = 0, 0, 0, 0, 0, 0
     for rid, rinfo in alignDB.items():
-        #read_strand=[]
+        read_strand=[]
         ribXrd, cgXrd, othXrd, teXrd, pdXrd = 0, 0, 0, 0, 0
         ribX, cgX, othX, teX, pdX = 0, 0, 0, 0, 0
+        cgO, othO, ribO, teO, pdO = [], [], [], [], []
         for rdet in rinfo:
-            #read_strand.append(rdet[2]) # storing the strand information of each alignment 
+            [ribXrdx, cgXrdx, othXrdx, teXrdx, pdXrdx] = [0, 0, 0, 0, 0]
+            read_strand.append(rdet[2]) # storing the strand information of each alignment 
             if rdet[0] in cg_featdb:
                 for details, strand_info in cg_featdb[rdet[0]].items():
                     if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
                         cgX+=1
+                        cgXrdx = 1
                         if rdet[2]==strand_info:
                             cgXrd=1
+                            cgO.append(1)
                         else:
                             cgXrd=-1
+                            cgO.append(-1)
                         break
             if rdet[0] in oth_featdb:
                 for details, strand_info in oth_featdb[rdet[0]].items():
                     if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
                         othX+=1
+                        othXrdx = 1
                         if rdet[2]==strand_info:
                             othXrd=1
+                            othO.append(1)
                         else:
                             othXrd=-1
+                            othO.append(-1)
                         break
             if rdet[0] in ribo_featdb:
                 for details, strand_info in ribo_featdb[rdet[0]].items():
                     if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
                         ribX+=1
+                        ribXrdx =1
                         if rdet[2]==strand_info:
                             ribXrd=1
+                            ribO.append(1)
                         else:
                             ribXrd=-1
+                            ribO.append(-1)
                         break
             if rdet[0] in te_featdb:
                 for details, strand_info in te_featdb[rdet[0]].items():
                     if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
                         teX+=1
+                        teXrdx=1
                         if rdet[2]==strand_info:
                             teXrd=1
+                            teO.append(1)
                         else:
                             teXrd=-1
+                            teO.append(-1)
                         break
             if rdet[0] in psd_featdb:
                 for details, strand_info in psd_featdb[rdet[0]].items():
                     if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
                         pdX+=1
+                        pdXrdx=1
                         if rdet[2]==strand_info:
                             pdXrd=1
+                            pdO.append(1)
                         else:
                             pdXrd=-1
+                            pdO.append(-1)
                         break
+            if [ribXrdx, cgXrdx, othXrdx, teXrdx, pdXrdx].count(0)==5:
+                if rdet[2] == 1:
+                    intplus += 1
+                else:
+                    intmin += 1
         #print ribXrd, cgXrd, othXrd, teXrd, pdXrd
         no_amnt += len(rinfo)
         if (no_amnt%1000)==0:print no_amnt
         # Counting starts from here ..
-        if len(set([ribXrd, cgXrd, othXrd, teXrd, pdXrd]))==1: # intergenic read 
-            inter_gene_reads[rid]=1
+        if [ribXrd, cgXrd, othXrd, teXrd, pdXrd].count(0)==5: # intergenic read 
+            #inter_gene_reads[rid]=1
             cnt_int += len(rinfo)
         elif [ribXrd, cgXrd, othXrd, teXrd, pdXrd].count(0)<=3: # multiple alignments spanning across different features
             #shared_reads[rid]=1
             cnt_share +=len(rinfo)
+            share_plus += read_strand.count(1)
+            share_min += read_strand.count(-1)
         elif cgXrd !=0:
             #CG_reads[rid]=1
             cnt_cg+=cgX
+            cgplus += cgO.count(1)
+            cgmin += cgO.count(-1)
             if cgX != len(rinfo):
                 cnt_int +=(len(rinfo)-cgX)
         elif othXrd !=0:
             #Oth_reads[rid]=1
             cnt_oth+=othX
+            othplus += othO.count(1)
+            othmin += othO.count(-1)
             if othX != len(rinfo):
                 cnt_int +=(len(rinfo)-othX)
         elif teXrd !=0:
             #TE_reads[rid]=1
             cnt_te+=teX
+            teplus += teO.count(1)
+            temin += teO.count(-1)
             if teX != len(rinfo):
                 cnt_int +=(len(rinfo)-teX)
         elif pdXrd !=0:
             #Psd_reads[rid]=1
             cnt_pd+=pdX
+            pdplus += pdO.count(1)
+            pdmin += pdO.count(-1)
             if pdX != len(rinfo):
                 cnt_int +=(len(rinfo)-pdX)
         elif ribXrd !=0:
             #Ribo_reads[rid]=1
             cnt_ribo+=ribX
+            ribplus += ribO.count(1)
+            ribmin += ribO.count(-1)
             if ribX != len(rinfo):
                 cnt_int+=(len(rinfo)-ribX)
 
     pline = ['Nr. of Alignments',
-            str(len(alignDB)), 
             str(no_amnt), 
             str(cnt_cg), 
+            str(cgplus),
+            str(cgmin),
             str(cnt_pd), 
+            str(pdplus),
+            str(pdmin),
             str(cnt_oth), 
+            str(othplus),
+            str(othmin),
             str(cnt_te), 
-            str(cnt_ribo), 
+            str(teplus),
+            str(temin),
+            str(cnt_ribo),
+            str(ribplus),
+            str(ribmin),
             str(cnt_int), 
-            str(cnt_share)
+            str(intplus),
+            str(intmin),
+            str(cnt_share),
+            str(share_plus),
+            str(share_min)
             ]
     print '\t'.join(pline)
     return inter_gene_reads
@@ -201,7 +251,7 @@ if __name__ == "__main__":
     try:
         bamf = sys.argv[1]
         anno_file = sys.argv[2]
-        samf = sys.argv[3]
+        #samf = sys.argv[3]
     except:
         print __doc__
         sys.exit(-1)
@@ -217,7 +267,7 @@ if __name__ == "__main__":
     print 'Figure out the read location on genome...'
     read_distribution = readScaner(read_db, cg_db, oth_db, ribo_db, te_db, psd_db)
     print '...Read coverage identified'
-    print 'Writing SAM file with Intergenic reads...'
+    """print 'Writing SAM file with Intergenic reads...'
     samfile = pysam.Samfile(bamf, 'rb')
     outsam = pysam.Samfile(samf, 'w', template = samfile)
     for rec in samfile.fetch():
@@ -225,5 +275,5 @@ if __name__ == "__main__":
             outsam.write(rec)
     outsam.close()
     samfile.close()
-    print '...SAM file ready', samf
+    print '...SAM file ready', samf"""
     print time.asctime( time.localtime(time.time()) )

@@ -20,7 +20,7 @@ def ParseSDI(fname, sname):
                     line[2],
                     '.',
                     '.',
-                    'ID=D_' + str(del_cnt).zfill(6) + ';Type=del;freq=' + line[2]+ ';RS=' + line[3] + ';SS=' + line[4]
+                    'ID=D_' + str(del_cnt).zfill(6) + ';Type=del;RS=' + line[3] + ';SS=' + line[4]
                     ]
             del_cnt += 1
             print '\t'.join(gline)
@@ -46,7 +46,7 @@ def ParseSDI(fname, sname):
                     line[2],
                     '.',
                     '.',
-                    'ID=I_' + str(ins_cnt).zfill(6) + ';Type=ins;freq=' + line[2]+ ';RS=' + line[3] + ';SS=' + line[4]
+                    'ID=I_' + str(ins_cnt).zfill(6) + ';Type=ins;RS=' + line[3] + ';SS=' + line[4]
                     ]
             ins_cnt += 1
             print '\t'.join(gline)

@@ -21,6 +21,20 @@ def stop_err(fmsg):
     sys.stderr.write('%s\n' % fmsg)
     sys.exit(-1)
 
+def LimitedBEDWriter(tinfo, bed_fh):
+    """Write a three column BED file 
+    """
+    for contig_id, feature in tinfo.items():
+        uns_line = dict()
+        for tid, tloc in feature.items():
+            uns_line[(int(tloc[0])-1, int(tloc[1]))]=1
+        for ele in sorted(uns_line):
+            pline = [contig_id, 
+                    str(ele[0]), 
+                    str(ele[1])]
+            bed_fh.write('\t'.join(pline) + '\n')
+    bed_fh.close()
+
 def WriteBED(tinfo, einfo, bed_fh):
     """Write content to a BED format
     """
@@ -93,6 +107,7 @@ def __main__():
     cmd_arg = OptionParser()
     cmd_arg.add_option('', '-q', dest='query_file', help='Data in GFF3 file')
     cmd_arg.add_option('', '-o', dest='result_file', help='BED file name')
+    cmd_arg.add_option('', '-t', dest='bed_type', help='Type of BED file l (limited to 3 required columns) or c (comprehensive 12 column BED format) (default: c, 12 Column BED)')
     options, args = cmd_arg.parse_args()
     if len(sys.argv) < 2:
         cmd_arg.print_help()
@@ -107,6 +122,12 @@ def __main__():
         except Exception, erm:
             stop_err('Error writing result file ' + str(erm))
         tinfo, einfo = ParseAnno(gff_fh) ## get transcript annotation from GFF3 file 
-        WriteBED(tinfo, einfo, bed_fh) ## BED writter 
+        if options.bed_type == None or options.bed_type == 'c':
+            WriteBED(tinfo, einfo, bed_fh) ## BED writter 
+        elif options.bed_type == 'l':
+            LimitedBEDWriter(tinfo, bed_fh) # limited BED file with three mandatory fields chrom, start and end. 
+        else:
+            cmd_arg.print_help()
+            sys.exit(-1)
 
 if __name__ == "__main__": __main__() 

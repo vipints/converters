@@ -5,8 +5,8 @@ it under the terms of the GNU General Public License as published by
 the Free Software Foundation; either version 3 of the License, or
 (at your option) any later version.
 
-Written (W) 2009-2011 Vipin T Sreedharan
-Copyright (C) 2009-2011 Friedrich Miescher Laboratory of the Max Planck Society
+Written (W) 2009-2012 Vipin T Sreedharan
+Copyright (C) 2009-2012 Friedrich Miescher Laboratory of the Max Planck Society
 
 Description : Convert data in Gene Transfer Format (GTF) to Generic Feature Format Version 3 (GFF3) file.
 """
@@ -98,82 +98,89 @@ def buildUTR(cc, ec, strand):
                 utr3.append(ex)
     return utr5, utr3
 
-def GFFWriter(gff_fh, gtf_file_content):
+def GFFWriter(gff_fh, gtf_file_cont):
     """Write into GFF3 
     """
     gff_fh.write('##gff-version 3\n')
-    for contig, contig_info in sorted(gtf_file_content.items()): # first level, chromosome
-        for feature, details in contig_info.items(): # second level, gene
-            gene_start, gene_stop, transcript_details, orient, gname = [], [], dict(), None, None
-            for ftid, tinfo in details.items(): # third level, transcripts 
-                tinfo['exon'].sort() # generalize the coordinate system in ascending order. 
+    for contig, contig_info in sorted(gtf_file_cont.items()): # chromosome 
+        for feature, details in contig_info.items(): # gene with source 
+            gene_start, gene_stop, tnames, gnames, transcript_details = [], [], dict(), None, dict()
+            for ftid, tinfo in details.items(): # transcripts 
+                tinfo['exon'].sort() # coordinate system in ascending order. 
                 tinfo['CDS'].sort()
                 if tinfo['exon']:
                     gene_start.append(tinfo['exon'][0][0])
                     gene_stop.append(tinfo['exon'][-1][1])
                 if not gene_start:
                     continue
-                orient = tinfo['info'][1]
-                gname = tinfo['info'][3]   
+                orient = tinfo['info'][0]
+                tnames[ftid]=tinfo['info'][-1]
+                gnames=tinfo['info'][-2]
                 if len(tinfo['CDS']) == 0: # non coding transcript 
-                    transcript_details[ftid] = dict(info = tinfo['info'], exon = tinfo['exon'], tpe = 'transcript')
+                    transcript_details[ftid] = dict(info = tinfo['info'], 
+                                                exon = tinfo['exon'], 
+                                                tpe = 'transcript')
                 else:
-                    if tinfo['stop_codon']: # in GTF stop codon are seperated from CDS, here we are adding the stop codon to CDS region based on the strand.
+                    if tinfo['sp_cod']: # stop codon are seperated from CDS, add the coordinates based on strand 
                         if orient == '+':
-                            if tinfo['stop_codon'][0][0]-tinfo['CDS'][-1][1] == 1:
-                                tinfo['CDS'][-1] = (tinfo['CDS'][-1][0], tinfo['stop_codon'][0][1])
+                            if tinfo['sp_cod'][0][0]-tinfo['CDS'][-1][1] == 1:
+                                tinfo['CDS'][-1] = (tinfo['CDS'][-1][0], tinfo['sp_cod'][0][1])
                             else:
-                                tinfo['CDS'].append(tinfo['stop_codon'][0])
+                                tinfo['CDS'].append(tinfo['sp_cod'][0])
                         if orient == '-':
-                            if tinfo['CDS'][0][0]-tinfo['stop_codon'][0][1] == 1:
-                                tinfo['CDS'][0] = (tinfo['stop_codon'][0][0], tinfo['CDS'][0][1])
+                            if tinfo['CDS'][0][0]-tinfo['sp_cod'][0][1] == 1:
+                                tinfo['CDS'][0] = (tinfo['sp_cod'][0][0], tinfo['CDS'][0][1])
                             else:
-                                tinfo['CDS'].insert(0, tinfo['stop_codon'][0])
+                                tinfo['CDS'].insert(0, tinfo['sp_cod'][0])
                     if tinfo['exon']:
                         utr5, utr3 = buildUTR(tinfo['CDS'], tinfo['exon'], orient) # getting UTR info from CDS and exon.
-                        transcript_details[ftid] = dict(info = tinfo['info'], exon = tinfo['exon'], utr5 = utr5, utr3 = utr3, cds = tinfo['CDS'], tpe = 'mRNA')
-            if gene_start and gene_stop:# displying Gene, transcript and subfeatures
+                        transcript_details[ftid] = dict(info = tinfo['info'], 
+                                                    exon = tinfo['exon'], 
+                                                    utr5 = utr5, 
+                                                    utr3 = utr3, 
+                                                    cds = tinfo['CDS'], 
+                                                    tpe = 'mRNA')
+            if gene_start and gene_stop: # displying Gene, transcript and subfeatures
                 gene_start.sort()
                 gene_stop.sort()
-                if gname == None:
-                    gname = feature # assign gene name as gene id, if not defined 
-                pline = [str(contig[0]),
-                        contig[1],
+                if gnames == None:
+                    gnames = feature[0] # assign gene name as gene id, if not defined 
+                pline = [str(contig),
+                        feature[1],
                         'gene',
                         str(gene_start[0]),
                         str(gene_stop[0]),
                         '.',
                         orient,
                         '.',
-                        'ID=' + feature + ';Name=' + gname]
-                gff_fh.write('\t'.join(pline) + '\n')
+                        'ID=' + feature[0] + ';Name=' + gnames]
+                gff_fh.write('\t'.join(pline) + '\n') # writing gene line 
                 for dtid, dinfo in transcript_details.items():
-                    if dinfo['info'][4]:
-                        pline = [str(contig[0]),
-                                dinfo['info'][0],
+                    if dinfo['info'][3]:
+                        pline = [str(contig),
+                                feature[1],
                                 dinfo['tpe'],
                                 str(dinfo['exon'][0][0]),
                                 str(dinfo['exon'][-1][1]),
-                                dinfo['info'][2],
+                                dinfo['info'][1],
                                 orient,
                                 '.',
-                                'ID=' + dtid + ';Parent=' + feature + ';Name=' + dinfo['info'][4]]
-                        gff_fh.write('\t'.join(pline) + '\n')
+                                'ID=' + dtid + ';Parent=' + feature[0] + ';Name=' + dinfo['info'][3]]
                     else:
-                        pline = [str(contig[0]),
-                                dinfo['info'][0],
+                        pline = [str(contig),
+                                feature[1],
                                 dinfo['tpe'],
                                 str(dinfo['exon'][0][0]),
                                 str(dinfo['exon'][-1][1]),
-                                dinfo['info'][2],
+                                dinfo['info'][1],
                                 orient,
                                 '.',
-                                'ID=' + dtid + ';Parent=' + feature]
-                        gff_fh.write('\t'.join(pline) + '\n')
+                                'ID=' + dtid + ';Parent=' + feature[0]]
+                    gff_fh.write('\t'.join(pline) + '\n') # writing transcript line 
                     if 'utr5' in dinfo:
                         for ele in dinfo['utr5']:
-                            pline = [str(contig[0]),
-                                    dinfo['info'][0], 
+                            pline = [str(contig),
+                                    feature[1], 
                                     'five_prime_UTR',
                                     str(ele[0]), 
                                     str(ele[1]),
@@ -181,12 +188,12 @@ def GFFWriter(gff_fh, gtf_file_content):
                                     orient,
                                     '.',
                                     'Parent=' + dtid]
-                            gff_fh.write('\t'.join(pline) + '\n')
+                            gff_fh.write('\t'.join(pline) + '\n') # writing 5 prime UTR line 
                     if 'cds' in dinfo:
                         cds_w_phase = addCDSphase(orient, dinfo['cds'])
                         for ele in cds_w_phase:
-                            pline = [str(contig[0]),
-                                    dinfo['info'][0],
+                            pline = [str(contig),
+                                    feature[1],
                                     'CDS',
                                     str(ele[0]),
                                     str(ele[1]),
@@ -194,11 +201,11 @@ def GFFWriter(gff_fh, gtf_file_content):
                                     orient,
                                     str(ele[-1]),
                                     'Parent=' + dtid]
-                            gff_fh.write('\t'.join(pline) + '\n')
+                            gff_fh.write('\t'.join(pline) + '\n') # writing CDS line 
                     if 'utr3' in dinfo:
                         for ele in dinfo['utr3']:
-                            pline = [str(contig[0]),
-                                    dinfo['info'][0],
+                            pline = [str(contig),
+                                    feature[1],
                                     'three_prime_UTR',
                                     str(ele[0]),
                                     str(ele[1]),
@@ -206,11 +213,11 @@ def GFFWriter(gff_fh, gtf_file_content):
                                     orient,
                                     '.',
                                     'Parent=' + dtid]
-                            gff_fh.write('\t'.join(pline) + '\n')
+                            gff_fh.write('\t'.join(pline) + '\n') # writing 3 prime UTR line 
                     if 'exon' in dinfo:
                         for ele in dinfo['exon']:
-                            pline = [str(contig[0]),
-                                    dinfo['info'][0],
+                            pline = [str(contig),
+                                    feature[1],
                                     'exon',
                                     str(ele[0]),
                                     str(ele[1]),
@@ -218,7 +225,7 @@ def GFFWriter(gff_fh, gtf_file_content):
                                     orient,
                                     '.',
                                     'Parent=' + dtid]
-                            gff_fh.write('\t'.join(pline) + '\n')
+                            gff_fh.write('\t'.join(pline) + '\n') # writing exon line 
     gff_fh.close()                            
 
 def getGTFcontent(gtf_file):
@@ -230,7 +237,9 @@ def getGTFcontent(gtf_file):
         if re.match(r'#|>', gtf_line[0]) or len(gtf_line)==1: # pass all commented and FASTA lines included in the GTF 
             continue 
         assert len(gtf_line) == 9, '\t'.join(gtf_line)
-        gid, tid, attb_tag = None, None, dict()
+        if re.search(r'^(start_codon|start-codon|startcodon)$', gtf_line[2], re.IGNORECASE):
+            continue
+        gid, tid, gname, tname = None, None, None, None
         for attb in gtf_line[-1].split(';'):
             if re.search(r'^\s?$', attb):
                 continue
@@ -240,8 +249,10 @@ def getGTFcontent(gtf_file):
                 gid = attb[1]
             elif re.search(r'^(transcript_id|transcriptId)$', attb[0], re.IGNORECASE):
                 tid = attb[1]
-            else:
-                attb_tag[attb[0]] = attb[1]
+            elif re.search(r'^(gene_name|genename)$', attb[0], re.IGNORECASE):
+                gname = attb[1]
+            elif re.search(r'^(transcript_name|transcriptname)$', attb[0], re.IGNORECASE):
+                tname = attb[1]
         if gid == tid: # UCSC genome browser GTF files were having similar gene and transcript identifier 
             gid = 'Gene:'+str(gid) 
             tid = 'Transcript:'+str(tid)
@@ -254,9 +265,7 @@ def getGTFcontent(gtf_file):
             cds = [(int(gtf_line[3]), int(gtf_line[4]))]
         elif re.search(r'^(stop_codon|stop-codon|stopcodon)$', gtf_line[2], re.IGNORECASE):
             sp_cod = [(int(gtf_line[3]), int(gtf_line[4]))]
-        elif re.search(r'^(start_codon|start-codon|startcodon)$', gtf_line[2], re.IGNORECASE):
-            st_cod = [(int(gtf_line[3]), int(gtf_line[4]))]
-        else: # other lines are not required to contruct 
+        else: # other lines are not required to contruct GFF3 lines 
             continue
         if gtf_line[0] in gtf_content: # adding to existing chromosome
             if (gid, gtf_line[1]) in gtf_content[gtf_line[0]].keys(): # adding to existing gene 
@@ -267,26 +276,21 @@ def getGTFcontent(gtf_file):
                         gtf_content[gtf_line[0]][(gid, gtf_line[1])][tid]['CDS'].append(cds[0])
                     elif sp_cod:    
                         gtf_content[gtf_line[0]][(gid, gtf_line[1])][tid]['sp_cod'].append(sp_cod[0])
-                    elif st_cod:
-                        gtf_content[gtf_line[0]][(gid, gtf_line[1])][tid]['st_cod'].append(st_cod[0])
                 else: # inserting new transcript
                     gtf_content[gtf_line[0]][(gid, gtf_line[1])][tid] = dict(exon = exon, 
                                                             CDS = cds, 
                                                             sp_cod = sp_cod, 
-                                                            st_cod = st_cod, 
-                                                            info = [gtf_line[6], gtf_line[5], attb_tag])
+                                                            info = [gtf_line[6], gtf_line[5], gname, tname])
             else: # inserting new gene 
                 gtf_content[gtf_line[0]][(gid, gtf_line[1])] = {tid : dict(exon = exon, 
                                                     CDS = cds,
                                                     sp_cod = sp_cod, 
-                                                    st_cod = st_cod,
-                                                    info = [gtf_line[6], gtf_line[5], attb_tag])}
+                                                    info = [gtf_line[6], gtf_line[5], gname, tname])}
         else: # inserting new chromosome identifier 
             gtf_content[gtf_line[0]] = {(gid, gtf_line[1]) : {tid : dict(exon = exon, 
                                             CDS = cds,
                                             sp_cod = sp_cod, 
-                                            st_cod = st_cod,
-                                            info = [gtf_line[6], gtf_line[5], attb_tag])}}
+                                            info = [gtf_line[6], gtf_line[5], gname, tname])}}
         recall = tid
     gtf_file.close()
     return gtf_content
@@ -300,7 +304,7 @@ def stop_err(fmsg):
 def __main__():
     cmd_arg = OptionParser()
     cmd_arg.add_option('', '-q', dest='query_file', help='Query file in Gene transfer format (GTF)')
-    cmd_arg.add_option('', '-o', dest='result_file', help='Output file name with GFF3 extension')
+    cmd_arg.add_option('', '-o', dest='result_file', help='Output file in Generic feature format version 3 (GFF3)')
     options, args = cmd_arg.parse_args()
     if len(sys.argv) < 2:
         cmd_arg.print_help()
@@ -314,6 +318,6 @@ def __main__():
     except Exception, erm:
         stop_err('Error writing result file ' + str(erm))
     gtf_file_content = getGTFcontent(gtf_fh)
-    #GFFWriter(gff_fh, gtf_file_content)
+    GFFWriter(gff_fh, gtf_file_content)
 
 if __name__ == "__main__": __main__()

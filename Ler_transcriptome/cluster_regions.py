@@ -1,8 +1,8 @@
-#!/usr/bin/python 
-"""From BAM file find out the genomic location with a big cluster of reads 
+#!/usr/bin/env python 
+"""
+From BAM file find out the genomic location with a big cluster of reads. 
 Usage: cluster_region.py in.bam
 """
-
 import re, sys, os 
 from bx.intervals.cluster import ClusterTree
 import collections
@@ -21,7 +21,7 @@ def process_bam(bam_file):
     sam_reader.close()
 
 if __name__ == '__main__':
-
+    sys.path.append('/fml/ag-raetsch/home/vipin/lib/python2.6/site-packages/:/fml/ag-raetsch/home/vipin/lib/python2.6/dist-packages/:/fml/ag-raetsch/home/vipin/lib/python2.5/site-packages/:/fml/ag-raetsch/home/vipin/lib/python/:/fml/ag-raetsch/home/vipin/development/gfftools/')
     try:
         bam_file = sys.argv[1]
     except:

@@ -121,6 +121,94 @@ def get_ribo_reads(bam_fh, rib_fdb):
                     ribo_db[each_align.qname]=[(fstd, smap[orient])]
     return ribo_db
 
+def process_elements(contig_id, read_db, te_fdb, ribo_read_db, bam_reader, rib_fdb, oth_fdb, teg_fdb, te_marker):
+    """fetch read alignments for each TE 
+    """
+    if contig_id in te_fdb:
+        cnt=1
+        unq_s_rid, unq_a_rid=dict(), dict()
+        for features in te_fdb[contig_id].items(): # just one TE is processing at a time.
+            unq_s, unq_a, all_s, all_a, te_rib_s, te_rib_a=0, 0, 0, 0, 0, 0
+            ste_a_rib, ate_s_rib=0, 0
+            align_db=get_region_alignment(bam_reader, contig_id, features[0][1], features[0][2])# fetch the read alignment corresponding to this feature
+            sys.stderr.write(str(cnt)+" "+features[0][0]+"\n")
+            cnt+=1
+            if len(align_db)>0: # feature has a coverage 
+                for each_item in align_db: # aligned reads 
+                    rid, rinfo=each_item
+                    if read_db[rid]>1: # multiple alignments
+                        std=[aln[2] for aln in rinfo] # alignment orientation 
+                        std=list(set(std))
+                        if len(std)>1:continue # different orientation alignment for a read in single location 
+                        if features[1]==std[0]: # sense/anti-sense orientation
+                            all_s+=1
+                        else:
+                            all_a+=1
+                        if rid in ribo_read_db: # check whether the reads are sharing with rRNA 
+                            if features[1]==std[0] and ribo_read_db[rid][0][0]==ribo_read_db[rid][0][1]: 
+                                te_rib_s+=1 # sense reads to TE & rRNA
+                            elif features[1]!=std[0] and ribo_read_db[rid][0][0]!=ribo_read_db[rid][0][1]:
+                                te_rib_a+=1 # Antisense read to TE & rRNA
+                            elif features[1]==std[0] and ribo_read_db[rid][0][0]!=ribo_read_db[rid][0][1]:
+                                ste_a_rib+=1 # sense TE antisense rRNA
+                            elif features[1]!=std[0] and ribo_read_db[rid][0][0]==ribo_read_db[rid][0][1]:
+                                ate_s_rib+=1 # antisense TE sense rRNA
+                    else: # check whether this unique alignment is in a shared annotated feature region from GFF.
+                        if features[0][0] in te_marker:
+                             if te_marker[features[0][0]]:
+                                if features[1]==te_marker[features[0][0]]:
+                                    continue
+                                else:
+                                    if features[1]==rinfo[0][2]:
+                                        unq_s+=1
+                                        all_s+=1
+                                        unq_s_rid[rid]=1
+                             else:
+                                if features[1]==rinfo[0][2]:
+                                    unq_s+=1
+                                    all_s+=1
+                                    unq_s_rid[rid]=1
+                                else:
+                                    unq_a+=1
+                                    all_a+=1
+                                    unq_a_rid[rid]=1
+                #break # one covered feature 
+            print features[0][0], unq_s, unq_a, all_s, all_a, te_rib_s, te_rib_a, ste_a_rib, ate_s_rib 
+        return unq_s_rid, unq_a_rid  
+
+def writeSAM(bam_reader, sense_reads, asense_reads, contig_id):
+
+    outsam_sense=pysam.Samfile(contig_id+'_sense.sam', 'w', template=bam_reader)
+    outsam_asense=pysam.Samfile(contig_id+'_antisense.sam', 'w', template=bam_reader)
+    for rec in bam_reader.fetch():
+        if rec.qname in sense_reads:
+            outsam_sense.write(rec)
+        elif rec.qname in asense_reads:
+            outsam_asense.write(rec)
+    outsam_sense.close()
+    outsam_asense.close()
+
+def overlap_feature(te_fdb, teg_fdb, rib_fdb, oth_fdb, chr_id):
+    """Indexing the TE based on whether they are sharing in genome with annotated regions.
+    """
+    te_index=dict()
+    for element in te_fdb[chr_id].items(): 
+        orientation=None
+        for region, strand in oth_fdb[chr_id].items():
+            if (element[0][1]<=region[0] and element[0][2]>=region[1]) or (element[0][1]>=region[0] and element[0][1]<= region[1]) or (element[0][2]>=region[0] and element[0][2]<=region[1]):
+                orientation=strand
+                break
+        if orientation:
+            te_index[element[0][0]]=orientation
+        else:
+            if chr_id in rib_fdb:
+                for region, strand in rib_fdb[chr_id].items():
+                    if (element[0][1]<=region[0] and element[0][2]>=region[1]) or (element[0][1]>=region[0] and element[0][1]<= region[1]) or (element[0][2]>=region[0] and element[0][2]<=region[1]):
+                        orientation=strand
+                        break
+            te_index[element[0][0]]=orientation
+    return te_index
+
 if __name__=="__main__":
     try:
         bamfname=sys.argv[1] 
@@ -131,64 +219,9 @@ if __name__=="__main__":
         sys.exit(-1)
     read_db=get_alignment(bamfname) # get alignment count for each read
     te_fdb, teg_fdb, rib_fdb, oth_fdb=get_annotation(gffname) # fetch genome annotation 
+    te_marker=overlap_feature(te_fdb, teg_fdb, rib_fdb, oth_fdb, contig_id)
     bam_reader=pysam.Samfile(bamfname, "rb") # BAM file handle for querying different feature interval
     ribo_read_db=get_ribo_reads(bam_reader, rib_fdb) # get rRNA region reads 
-    # fetch read alignments for each TE 
-    # TODO Write a sam file with unique reads set. 
-    if contig_id in te_fdb: 
-        for features in te_fdb[contig_id].items(): # just one TE is processing at a time.
-            unq_s, unq_a, all_s, all_a, te_rib_s, te_rib_a=0, 0, 0, 0, 0, 0
-            align_db=get_region_alignment(bam_reader, contig_id, features[0][1], features[0][2])# fetch the read alignment corresponding to this feature
-            if len(align_db)>0: # feature has a coverage 
-                for each_item in align_db: # aligned reads 
-                    rid, rinfo=each_item
-                    if read_db[rid]>1: # multiple alignments
-                        std=[aln[2] for aln in rinfo]# alignment orientation 
-                        std=list(set(std))
-                        if len(std)>1: # multiple alignment fall in same region different orientation. 
-                            print rid
-                            all_s+=0.5
-                            all_a+=0.5
-                        else:
-                            if features[1]==std[0]: # sense/anti-sense orientation
-                                all_s+=1
-                            else:
-                                all_a+=1
-                        if rid in ribo_read_db: # TODO different combination check whether the reads are sharing from rRNA 
-                            if features[1]==std[0] and ribo_read_db[rid][0]==ribo_read_db[rid][1]:
-                                te_rib_s+=1
-                            if features[1]!=std[0] and ribo_read_db[rid][0]!=ribo_read_db[rid][1]:
-                                te_rib_a+=1
-                    else: # check whether this unique alignment is in a shared annotated feature region from GFF.
-                        orientation=None
-                        if rinfo[0][0] in rib_fdb:
-                            for region, strand in rib_fdb[rinfo[0][0]].items():
-                                if region[0]<=rinfo[0][1]+rinfo[0][4] and rinfo[0][1]+rinfo[0][4]<=region[1]: # + aligned read length 
-                                    orientation=strand
-                                    break
-                        if orientation:
-                            if features[1]==orientation: # same orientation two different feature annotation hard to decide 
-                                continue 
-                            else:
-                                if features[1]==rinfo[0][2]: # only considering the sense direction, anti-sense we cannot make decision when there is something present in the opposite direction
-                                    unq_s+=1
-                            continue 
-                        if rinfo[0][0] in oth_fdb:
-                            for region, strand in oth_fdb[rinfo[0][0]].items():
-                                if region[0]<=rinfo[0][1]+rinfo[0][4] and rinfo[0][1]+rinfo[0][4]<=region[1]: # + aligned read length 
-                                    orientation=strand
-                                    break
-                        if orientation:
-                            if features[1]==orientation: 
-                                continue 
-                            else:
-                                if features[1]==rinfo[0][2]:
-                                    unq_s+=1
-                            continue 
-                        if features[1]==rinfo[0][2]:
-                            unq_s+=1
-                        else:
-                            unq_a+=1
-                #break # one covered feature 
-            #print features[0][0], unq_s, unq_a, all_s, all_a, te_rib_s, te_rib_a 
+    sense_reads, asense_reads=process_elements(contig_id, read_db, te_fdb, ribo_read_db, bam_reader, rib_fdb, oth_fdb, teg_fdb, te_marker)
+    writeSAM(bam_reader, sense_reads, asense_reads, contig_id)
     bam_reader.close()

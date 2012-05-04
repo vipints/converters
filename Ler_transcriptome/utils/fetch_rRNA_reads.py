@@ -4,6 +4,8 @@ Program to fetch reads falling on ribosomal RNA region.
 Resulting file in BAM format.
 
 Usage: samtools view -h in.bam | grep -e "^@" | fetch_rRNA_reads.py in_rRNA.bed in.bam -f| samtools view -bS - > out.bam 
+example:
+samtools view -h ~/tmp/TE_Chr1.bam | grep -e "^@" | python ~/development/Ler_transcriptome/utils/fetch_rRNA_reads.py ~/tmp/ler-1/global_rRNA.bed ebr2_NM2.bam -f | samtools view -bS - > ebr2_NM2_rRNA.bam
 """
 import re, sys 
 import time
@@ -31,6 +33,9 @@ def AlignGenerator(fbam, rib_db):
     for rec in samfile.fetch():
         for details, strand_info in rib_db[samfile.getrname(rec.rname)].items():
             if details[0]-42 <= int(rec.pos) and int(rec.pos) <= details[1]+5:
+                new_tags=rec.tags
+                new_tags.append(('Yf', strand_info))
+                rec.tags=new_tags
                 outsam.write(rec)
                 break
     samfile.close()

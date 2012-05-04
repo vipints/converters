@@ -1,61 +1,13 @@
 #!/usr/bin/env python 
 """
-Program to find the number of reads aligned to each TE element region in 
-A. thaliana genome. 
-Usage: fetch_BAM.py in.bam in.gff3
+Generate a table with annotated TE's from Col-0 genome and calculate the 
+read distribution in sense/anti-sense/uniq locations, also the overlapping 
+rRNA regions extracted from Silva, TAIR10 and genbank data sources.
+
+Usage: gen_TE_table.py itablen.bam in.gff3
 """
 import os 
 import sys, re, pysam 
-import multiprocessing
-import collections
-import itertools
-
-class MapReduce(object):
-    
-    def __init__(self, map_func, reduce_func, num_workers=None):
-        """
-        map_func
-          Function to map inputs to intermediate data. Takes as
-          argument one input value and returns a tuple with the key
-          and a value to be reduced.
-        
-        reduce_func
-          Function to reduce partitioned version of intermediate data
-          to final output. Takes as argument a key as produced by
-          map_func and a sequence of the values associated with that
-          key.
-         
-        num_workers
-          The number of workers to create in the pool. Defaults to the
-          number of CPUs available on the current host.
-        """
-        self.map_func = map_func
-        self.reduce_func = reduce_func
-        self.pool = multiprocessing.Pool(num_workers)
-    
-    def partition(self, mapped_values):
-        """Organize the mapped values by their key.
-        Returns an unsorted sequence of tuples with a key and a sequence of values.
-        """
-        partitioned_data = collections.defaultdict(list)
-        for key, value in mapped_values:
-            partitioned_data[key].append(value)
-        return partitioned_data.items()
-    
-    def __call__(self, inputs, chunksize=1):
-        """Process the inputs through the map and reduce functions given.
-        
-        inputs
-          An iterable containing the input data to be processed.
-        
-        chunksize=1
-          The portion of the input data to hand to each worker.  This
-          can be used to tune performance during the mapping phase.
-        """
-        map_responses = self.pool.map(self.map_func, inputs, chunksize=chunksize)
-        partitioned_data = self.partition(itertools.chain(*map_responses))
-        reduced_values = self.pool.map(self.reduce_func, partitioned_data)
-        return reduced_values
 
 def get_alignment(bfname):
     """Read BAM file and count the number of alignments for each read.
@@ -77,10 +29,10 @@ def get_annotation(fname, rfname):
     """
     from Core import GFF
     te_featdb, teg_featdb, ribo_featdb, oth_featdb=dict(), dict(), dict(), dict()
-    for cid in ['Chr1', 'Chr2', 'Chr3', 'Chr4', 'Chr5', 'ChrM', 'ChrC']: ## change according to the GFF file TODO According to the file type add chromosome number automatically.
+    for cid in ['Chr1', 'Chr2', 'Chr3', 'Chr4', 'Chr5', 'ChrM', 'ChrC']: 
         sys.stderr.write(cid+".....\n")
         fh = open(fname, 'rU')
-        limit_info = dict(gff_id=[cid], gff_source=['TAIR10']) ## change the source TODO According to the file type add source flag automatically 
+        limit_info = dict(gff_id=[cid], gff_source=['TAIR10']) 
         for rec in GFF.parse(fh, limit_info=limit_info):
             for each_rec in rec.features:
                 if each_rec.type=='gene':
@@ -149,24 +101,22 @@ def get_region_alignment(bam_fh, ctg_id, start, stop):
     bamdb = [(fid, finfo) for fid, finfo in samdb.items()]
     return bamdb
 
-def get_ribo_reads(bfname, rib_fdb):
+def get_ribo_reads(rib_fname):
     """Take the reads from ribosomal RNA region
     """
     ribo_db=dict()
     smap={'+' : 1, '-' : -1}
-    bam_read = pysam.Samfile(bfname, 'rb') 
-    for contig_nb, rib_info in sorted(rib_fdb.items()):
-        for cod, fstd in sorted(rib_info.items()): 
-            sys.stderr.write(contig_nb+' '+str(cod[0]) +' '+ str(cod[1])+ '...\n')
-            for each_align in bam_read.fetch(contig_nb, cod[0], cod[1]):
-                for cont in each_align.tags:
-                    if cont[0]=="XS":
-                        orient=cont[1]
-                        break
-                if each_align.qname in ribo_db:
-                    ribo_db[each_align.qname].append((fstd, smap[orient]))
-                else:
-                    ribo_db[each_align.qname]=[(fstd, smap[orient])]
+    bam_read = pysam.Samfile(rib_fname, 'rb') 
+    for each_align in bam_read.fetch():
+        for cont in each_align.tags:
+            if cont[0]=="XS":
+                orient=cont[1]
+            if cont[0]=="Yf":
+                fstd=cont[1]
+        if each_align.qname in ribo_db:
+            ribo_db[each_align.qname].append((fstd, smap[orient]))
+        else:
+            ribo_db[each_align.qname]=[(fstd, smap[orient])]
     bam_read.close()
     return ribo_db
 
@@ -263,20 +213,25 @@ if __name__=="__main__":
         bamfname=sys.argv[1] 
         gffname=sys.argv[2]
         add_rRNA=sys.argv[3]
+        rib_bamf=sys.argv[4]
     except:
         print __doc__
         sys.exit(-1)
     read_db=get_alignment(bamfname) # get alignment count for each read
-    sys.stderr.write(str(len(read_db))+' mapped reads stored in dym db\n')
+    sys.stderr.write(str(len(read_db))+' mapped reads stored in db\n')
+
     te_fdb, teg_fdb, rib_fdb, oth_fdb=get_annotation(gffname, add_rRNA) # fetch genome annotation 
     sys.stderr.write('genome annotation stored in dym db\n')
-    ribo_read_db=get_ribo_reads(bamfname, rib_fdb) # get rRNA region reads 
-    sys.stderr.write('rRNA read ids stored in dym db\n')
+
+    ribo_read_db=get_ribo_reads(rib_bamf) # get rRNA region reads 
+    sys.stderr.write('rRNA read ids stored in db\n')
     sys.stderr.write(str(len(ribo_read_db))+' reads to rRNA \n')
+
     bam_reader=pysam.Samfile(bamfname, "rb") # BAM file handle for querying different feature interval
     for cid in ['Chr1', 'Chr2', 'Chr3', 'Chr4', 'Chr5']: # check for TE's in Chr1..5
         te_marker=overlap_feature(te_fdb, teg_fdb, rib_fdb, oth_fdb, cid)
         sys.stderr.write(cid+' feature indexing done\n')
         sense_reads, asense_reads=process_elements(cid, read_db, te_fdb, ribo_read_db, bam_reader, rib_fdb, oth_fdb, teg_fdb, te_marker)
         writeSAM(bam_reader, sense_reads, asense_reads, cid)
+        break
     bam_reader.close()

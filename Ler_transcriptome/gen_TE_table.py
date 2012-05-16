@@ -27,6 +27,7 @@ def get_alignment(bfname):
 def get_annotation(fname, rfname):
     """Parse genome annotation from GFF3 file.
     """
+    smap={1:'+',  -1:'-'}
     from Core import GFF
     te_featdb, teg_featdb, ribo_featdb, oth_featdb=dict(), dict(), dict(), dict()
     for cid in ['Chr1', 'Chr2', 'Chr3', 'Chr4', 'Chr5', 'ChrM', 'ChrC']: 
@@ -40,45 +41,44 @@ def get_annotation(fname, rfname):
                         if child.type in ['mRNA', 'miRNA', 'ncRNA', 'snoRNA', 'snRNA', 'tRNA']:
                             if cid in oth_featdb:
                                 oth_featdb[cid][(int(each_rec.location._start.position), 
-                                    int(each_rec.location._end.position))]=each_rec.strand
+                                    int(each_rec.location._end.position))]=smap[each_rec.strand]
                             else:
                                 oth_featdb[cid]={(int(each_rec.location._start.position), 
                                     int(each_rec.location._end.position)):
-                                    each_rec.strand}
+                                    smap[each_rec.strand]}
                 elif each_rec.type=='transposable_element_gene':
                     if cid in teg_featdb:
                         teg_featdb[cid][(int(each_rec.location._start.position), 
-                                int(each_rec.location._end.position))]=each_rec.strand
+                                int(each_rec.location._end.position))]=smap[each_rec.strand]
                     else:
                         teg_featdb[cid]={(int(each_rec.location._start.position), 
                                 int(each_rec.location._end.position)): 
-                                each_rec.strand}
+                                smap[each_rec.strand]}
                 elif each_rec.type=='transposable_element':
                     if cid in te_featdb:
                         te_featdb[cid][(each_rec.id, int(each_rec.location._start.position), 
-                                int(each_rec.location._end.position))]=each_rec.strand
+                                int(each_rec.location._end.position))]=smap[each_rec.strand]
                     else:
                         te_featdb[cid]={(each_rec.id, int(each_rec.location._start.position), 
                                 int(each_rec.location._end.position)): 
-                                each_rec.strand}
+                                smap[each_rec.strand]}
                 elif each_rec.type=='pseudogene':
                     if cid in oth_featdb:
                         oth_featdb[cid][(int(each_rec.location._start.position), 
-                                int(each_rec.location._end.position))]=each_rec.strand
+                                int(each_rec.location._end.position))]=smap[each_rec.strand]
                     else:
                         oth_featdb[cid]={(int(each_rec.location._start.position), 
                                 int(each_rec.location._end.position)): 
-                                each_rec.strand}
+                                smap[each_rec.strand]}
         fh.close()
     ## add additional rRNA related location from A. thaliana
-    smap={'+' : 1, '-' : -1}
     fh=open(rfname, 'rU')
     for line in fh:
         line=line.strip('\n\r').split(' ')
         if line[0] in ribo_featdb:
-            ribo_featdb[line[0]][(int(line[1]), int(line[2]))]=smap[line[3]]
+            ribo_featdb[line[0]][(int(line[1]), int(line[2]))]=line[3]
         else:
-            ribo_featdb[line[0]]={(int(line[1]), int(line[2])):smap[line[3]]}
+            ribo_featdb[line[0]]={(int(line[1]), int(line[2])):line[3]}
     fh.close()
     return te_featdb, teg_featdb, ribo_featdb, oth_featdb
 
@@ -86,7 +86,6 @@ def get_region_alignment(bam_fh, ctg_id, start, stop):
     """Get the read alignment from each TE region based on the request.
     """
     samdb=dict()
-    smap={'+' : 1, '-' : -1}
     for each_align in bam_fh.fetch(ctg_id, start, stop):
         for cont in each_align.tags:
             if cont[0]=='NM':
@@ -95,9 +94,9 @@ def get_region_alignment(bam_fh, ctg_id, start, stop):
                 orient=cont[1]
                 break
         if each_align.qname in samdb:
-            samdb[each_align.qname].append((bam_fh.getrname(each_align.rname), each_align.pos, smap[orient], NM, each_align.qlen))
+            samdb[each_align.qname].append((bam_fh.getrname(each_align.rname), each_align.pos, orient, NM, each_align.qlen))
         else:
-            samdb[each_align.qname]=[(bam_fh.getrname(each_align.rname), each_align.pos, smap[orient], NM, each_align.qlen)]
+            samdb[each_align.qname]=[(bam_fh.getrname(each_align.rname), each_align.pos, orient, NM, each_align.qlen)]
     bamdb = [(fid, finfo) for fid, finfo in samdb.items()]
     return bamdb
 
@@ -105,18 +104,18 @@ def get_ribo_reads(rib_fname):
     """Take the reads from ribosomal RNA region
     """
     ribo_db=dict()
-    smap={'+' : 1, '-' : -1}
     bam_read = pysam.Samfile(rib_fname, 'rb') 
     for each_align in bam_read.fetch():
         for cont in each_align.tags:
             if cont[0]=="XS":
                 orient=cont[1]
+                break
             if cont[0]=="Yf":
                 fstd=cont[1]
         if each_align.qname in ribo_db:
-            ribo_db[each_align.qname].append((fstd, smap[orient]))
+            ribo_db[each_align.qname].append((fstd, orient))
         else:
-            ribo_db[each_align.qname]=[(fstd, smap[orient])]
+            ribo_db[each_align.qname]=[(fstd, orient)]
     bam_read.close()
     return ribo_db
 
@@ -233,5 +232,4 @@ if __name__=="__main__":
         sys.stderr.write(cid+' feature indexing done\n')
         sense_reads, asense_reads=process_elements(cid, read_db, te_fdb, ribo_read_db, bam_reader, rib_fdb, oth_fdb, teg_fdb, te_marker)
         writeSAM(bam_reader, sense_reads, asense_reads, cid)
-        break
     bam_reader.close()

@@ -73,10 +73,10 @@ def map_fn(items):
     cgOR, othOR, ribOR, pdOR, teOR, intOR = [], [], [], [], [], []
     for rdet in rinfo:
         read_strand.append(rdet[2])
-        [ribXrdx, cgXrdx, othXrdx, teXrdx, pdXrdx] = [0, 0, 0, 0, 0]
+        ribXrdx, cgXrdx, othXrdx, teXrdx, pdXrdx=0, 0, 0, 0, 0
         if rdet[0] in cg_featdb:
             for details, strand_info in cg_featdb[rdet[0]].items():
-                if details[0]-95 <= rdet[1] and rdet[1] <= details[1]+10:
+                if details[0]-42 <= rdet[1] and rdet[1] <= details[1]+5:
                     cgX+=1
                     cgXrdx=1
                     if rdet[2]==strand_info:
@@ -88,7 +88,7 @@ def map_fn(items):
                     break
         if rdet[0] in oth_featdb:
             for details, strand_info in oth_featdb[rdet[0]].items():
-                if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
+                if details[0]-42 <= rdet[1] and rdet[1] <= details[1]+5:
                     othX+=1
                     othXrdx=1
                     if rdet[2]==strand_info:
@@ -100,7 +100,7 @@ def map_fn(items):
                     break
         if rdet[0] in ribo_featdb:
             for details, strand_info in ribo_featdb[rdet[0]].items():
-                if details[0]-95 <= rdet[1] and rdet[1] <= details[1]+10:
+                if details[0]-42 <= rdet[1] and rdet[1] <= details[1]+5:
                     ribX+=1
                     ribXrdx =1
                     if rdet[2]==strand_info:
@@ -112,7 +112,7 @@ def map_fn(items):
                     break
         if rdet[0] in te_featdb:
             for details, strand_info in te_featdb[rdet[0]].items():
-                if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
+                if details[0]-42 <= rdet[1] and rdet[1] <= details[1]+5:
                     teX+=1
                     teXrdx=1
                     if rdet[2]==strand_info:
@@ -124,7 +124,7 @@ def map_fn(items):
                     break
         if rdet[0] in psd_featdb:
             for details, strand_info in psd_featdb[rdet[0]].items():
-                if details[0]-95 <= rdet[1] and rdet[1] <= details[1]:
+                if details[0]-42 <= rdet[1] and rdet[1] <= details[1]+5:
                     pdX+=1
                     pdXrdx=1
                     if rdet[2]==strand_info:
@@ -136,7 +136,7 @@ def map_fn(items):
                     break
         if [ribXrdx, cgXrdx, othXrdx, teXrdx, pdXrdx].count(0)==5:
             intXrd = 1
-            if rdet[2]==strand_info:
+            if rdet[2]=='+':
                 intOR.append(1)
             else:
                 intOR.append(-1)
@@ -314,20 +314,28 @@ def MakeReadDB(fbam):
     fh_txt.close()
     return bamdb
     
-if __name__ == "__main__":
+def breakDown(rawInput, chunk_size):
+    small_packs=dict()
+    for i in range(0, len(rawInput), chunk_size):
+        small_packs[i]=rawInput[i:i+chunk_size]
+    return small_packs
+
+if __name__=="__main__":
     try:
-        bamf = sys.argv[1]
-        anno_file = sys.argv[2]
+        bamf=sys.argv[1]
+        anno_file=sys.argv[2]
     except:
         print __doc__
         sys.exit(-1)
     print time.asctime( time.localtime(time.time()) )
-    te_featdb, psd_featdb, cg_featdb, oth_featdb, ribo_featdb = dict(), dict(), dict(), dict(), dict() # declaring variable 
-    te_featdb, psd_featdb, cg_featdb, oth_featdb, ribo_featdb = get_Feature(anno_file) # parse function for getting annotation 
-    #read_db = AlignGenerator(bamf) # parse function for getting read alignment information 
-    read_db = MakeReadDB(bamf) # Take the splited BAM content 
-    master_job = MapReduce(map_fn, reduce_fn, 6) # create an object such that the jobs are distributing in 31 CPU's 
-    results = master_job(read_db) # start the core the job
+    te_featdb, psd_featdb, cg_featdb, oth_featdb, ribo_featdb=dict(), dict(), dict(), dict(), dict() # declaring variable 
+    #te_featdb, psd_featdb, cg_featdb, oth_featdb, ribo_featdb=get_Feature(anno_file) # parse function for getting annotation 
+    read_db=AlignGenerator(bamf) # parse function for getting read alignment information 
+    print time.asctime( time.localtime(time.time()) )
+    #read_db = MakeReadDB(bamf) # Take the splited BAM content 
+    chunk_packs=breakDown(read_db, 100)
+    master_job=MapReduce(map_fn, reduce_fn, 6) # create an object such that the jobs are distributing in 31 CPU's 
+    results = master_job(chunk_packs, len(chunk_packs)) # start the core the job
     print 
     for element in sorted(results):
         print element[0][0], element[0][1]

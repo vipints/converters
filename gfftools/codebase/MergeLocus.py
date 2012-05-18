@@ -304,8 +304,7 @@ def ParseGFF(gff_file):
     gff_handle.close()
     return genes, transcripts, exons, utr5, cds, utr3
 
-import re, sys 
-import time 
+import re, sys, time 
 import collections
 
 if __name__=='__main__':

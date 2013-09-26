@@ -1,14 +1,10 @@
 #!/usr/bin/env python
 """
-This program is free software; you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 3 of the License, or
-(at your option) any later version.
+Convert data in Gene Transfer Format (GTF) to Generic Feature Format Version 3 (GFF3) file.
 
 Written (W) 2009-2012 Vipin T Sreedharan
 Copyright (C) 2009-2012 Friedrich Miescher Laboratory of the Max Planck Society
 
-Description : Convert data in Gene Transfer Format (GTF) to Generic Feature Format Version 3 (GFF3) file.
 """
 
 import re, sys
@@ -149,7 +145,7 @@ def GFFWriter(gff_fh, gtf_file_cont):
                         feature[1],
                         'gene',
                         str(gene_start[0]),
-                        str(gene_stop[0]),
+                        str(gene_stop[-1]),
                         '.',
                         orient,
                         '.',
@@ -165,7 +161,8 @@ def GFFWriter(gff_fh, gtf_file_cont):
                                 dinfo['info'][1],
                                 orient,
                                 '.',
-                                'ID=' + dtid + ';Parent=' + feature[0] + ';Name=' + dinfo['info'][3]]
+                                'ID=' + str(dtid) + ';Parent=' + feature[0] + ';Name=' + str(dinfo['info'][3]) ]
+                                #'ID=' + str(dtid) + ';Parent=' + feature[0] + ';Name=' + str(dinfo['info'][3]) +';Type='+dinfo['info'][4]]
                     else:
                         pline = [str(contig),
                                 feature[1],
@@ -215,7 +212,8 @@ def GFFWriter(gff_fh, gtf_file_cont):
                                     'Parent=' + dtid]
                             gff_fh.write('\t'.join(pline) + '\n') # writing 3 prime UTR line 
                     if 'exon' in dinfo:
-                        for ele in dinfo['exon']:
+                        intron_start = 0
+                        for xq, ele in enumerate(dinfo['exon']):
                             pline = [str(contig),
                                     feature[1],
                                     'exon',
@@ -226,6 +224,23 @@ def GFFWriter(gff_fh, gtf_file_cont):
                                     '.',
                                     'Parent=' + dtid]
                             gff_fh.write('\t'.join(pline) + '\n') # writing exon line 
+                            if xq ==0:
+                                intron_start = ele[1]+1 
+                                continue 
+                            pline = [str(contig),
+                                    feature[1],
+                                    'intron',
+                                    str(intron_start),
+                                    str(ele[0]-1),
+                                    '.',
+                                    orient,
+                                    '.',
+                                    'Parent=' + dtid]
+                            gff_fh.write('\t'.join(pline) + '\n') # writing intron line 
+                            intron_start = ele[1]+1 
+                            #if len(dinfo['exon'])-1 == xq:
+                            #    continue
+                             
     gff_fh.close()                            
 
 def getGTFcontent(gtf_file):
@@ -237,9 +252,11 @@ def getGTFcontent(gtf_file):
         if re.match(r'#|>', gtf_line[0]) or len(gtf_line)==1: # pass all commented and FASTA lines included in the GTF 
             continue 
         assert len(gtf_line) == 9, '\t'.join(gtf_line)
+        if '' in gtf_line:
+            continue
         if re.search(r'^(start_codon|start-codon|startcodon)$', gtf_line[2], re.IGNORECASE):
             continue
-        gid, tid, gname, tname = None, None, None, None
+        gid, tid, gname, tname, ttype = None, None, None, None, None
         for attb in gtf_line[-1].split(';'):
             if re.search(r'^\s?$', attb):
                 continue
@@ -253,6 +270,8 @@ def getGTFcontent(gtf_file):
                 gname = attb[1]
             elif re.search(r'^(transcript_name|transcriptname)$', attb[0], re.IGNORECASE):
                 tname = attb[1]
+            elif re.search(r'^(transcript_type)$', attb[0], re.IGNORECASE):
+                ttype = attb[1]
         if gid == tid: # UCSC genome browser GTF files were having similar gene and transcript identifier 
             gid = 'Gene:'+str(gid) 
             tid = 'Transcript:'+str(tid)
@@ -280,17 +299,17 @@ def getGTFcontent(gtf_file):
                     gtf_content[gtf_line[0]][(gid, gtf_line[1])][tid] = dict(exon = exon, 
                                                             CDS = cds, 
                                                             sp_cod = sp_cod, 
-                                                            info = [gtf_line[6], gtf_line[5], gname, tname])
+                                                            info = [gtf_line[6], gtf_line[5], gname, tname, ttype])
             else: # inserting new gene 
                 gtf_content[gtf_line[0]][(gid, gtf_line[1])] = {tid : dict(exon = exon, 
                                                     CDS = cds,
                                                     sp_cod = sp_cod, 
-                                                    info = [gtf_line[6], gtf_line[5], gname, tname])}
+                                                    info = [gtf_line[6], gtf_line[5], gname, tname, ttype])}
         else: # inserting new chromosome identifier 
             gtf_content[gtf_line[0]] = {(gid, gtf_line[1]) : {tid : dict(exon = exon, 
                                             CDS = cds,
                                             sp_cod = sp_cod, 
-                                            info = [gtf_line[6], gtf_line[5], gname, tname])}}
+                                            info = [gtf_line[6], gtf_line[5], gname, tname, ttype])}}
         recall = tid
     gtf_file.close()
     return gtf_content
